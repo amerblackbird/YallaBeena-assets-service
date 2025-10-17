@@ -251,7 +251,6 @@ jobs:
     - name: Build application
       run: |
         go build -v -o assets-service ./cmd/app
-        go build -v -o grpc-client ./cmd/client
 
     - name: Test Docker build
       run: |

@@ -21,7 +21,12 @@ go.work
 /build/
 /dist/
 /bin/
-app
+# Ignore built binaries but not source directories
+/app
+/assets-service
+/grpc-client
+/grpc_client
+/grpc_assets_client
 
 # Environment files
 .env
