@@ -93,10 +93,36 @@ jobs:
         done
         
         # Wait for MinIO
-        until curl -f http://localhost:9000/minio/health/live; do
-          echo "Waiting for MinIO..."
-          sleep 2
+        echo "Waiting for MinIO to be ready..."
+        for i in {1..30}; do
+          if curl -f http://localhost:9000/minio/health/live 2>/dev/null; then
+            echo "MinIO is ready!"
+            break
+          elif [ $i -eq 30 ]; then
+            echo "MinIO failed to start within 60 seconds"
+            curl -v http://localhost:9000/minio/health/live || true
+            exit 1
+          else
+            echo "Attempt $i: MinIO not ready yet..."
+            sleep 2
+          fi
         done
+
+    - name: Setup MinIO bucket
+      run: |
+        # Install MinIO client
+        wget https://dl.min.io/client/mc/release/linux-amd64/mc
+        chmod +x mc
+        sudo mv mc /usr/local/bin/
+        
+        # Configure MinIO client
+        mc alias set local http://localhost:9000 minioadmin minioadmin
+        
+        # Create test bucket if it doesn't exist
+        mc mb local/test-assets --ignore-existing
+        
+        # Verify bucket exists
+        mc ls local/
 
     - name: Run database migrations
       run: |
