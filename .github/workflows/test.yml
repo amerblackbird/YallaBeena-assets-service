@@ -40,18 +40,18 @@ jobs:
           - 6379:6379
           
       minio:
-        image: minio/minio:latest
+        image: bitnami/minio:latest
         env:
           MINIO_ROOT_USER: minioadmin
           MINIO_ROOT_PASSWORD: minioadmin
+          MINIO_DEFAULT_BUCKETS: test-assets
         options: >-
-          --health-cmd "curl -f http://localhost:9000/minio/health/live"
+          --health-cmd "curl -f http://localhost:9000/minio/health/live || exit 1"
           --health-interval 30s
           --health-timeout 20s
-          --health-retries 3
+          --health-retries 5
         ports:
           - 9000:9000
-          - 9001:9001
 
     steps:
     - uses: actions/checkout@v4
