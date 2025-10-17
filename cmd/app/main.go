@@ -80,7 +80,7 @@ func main() {
 		log.Fatalf("Failed to initialize storage service: %v", err)
 	}
 
-	assetsService := services.NewAssetsService(assetsRepo, storageService, cacheService, appLogger)
+	assetsService := services.NewAssetsService(assetsRepo, storageService, eventPublisher, cacheService, appLogger)
 
 	// Initialize event handlers
 	eventHandlers := kafkaadapter.NewEventHandlers(assetsRepo, appLogger)

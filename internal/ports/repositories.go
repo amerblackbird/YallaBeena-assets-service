@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"assets-service/internal/core/domain"
-	"assets-service/internal/core/events"
 )
 
 // AssetsRepository defines the interface for asset data persistence
@@ -18,7 +17,10 @@ type AssetsRepository interface {
 
 // EventPublisher defines the interface for publishing domain events
 type EventPublisher interface {
-	PublishActivityLogRegistered(ctx context.Context, event events.ActivityLogRegisteredEvent) error
+	// LogActivity publishes user activity log event
+	LogActivity(ctx context.Context, userID string, action string, metadata *domain.LogActivityMetadata) error
+
+	// Stop stops publisher events
 	Close() error
 }
 

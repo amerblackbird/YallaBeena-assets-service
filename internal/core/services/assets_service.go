@@ -15,6 +15,7 @@ type AssetsService struct {
 	assetsRepo     ports.AssetsRepository
 	storageService ports.StoragesService
 	cacheService   ports.CacheService
+	eventPublisher ports.EventPublisher
 	logger         ports.Logger
 }
 
@@ -22,11 +23,13 @@ type AssetsService struct {
 func NewAssetsService(
 	assetsRepo ports.AssetsRepository,
 	storageService ports.StoragesService,
+	eventPublisher ports.EventPublisher,
 	cacheService ports.CacheService,
 	logger ports.Logger) ports.AssetsService {
 	return &AssetsService{
 		assetsRepo:     assetsRepo,
 		cacheService:   cacheService,
+		eventPublisher: eventPublisher,
 		storageService: storageService,
 		logger:         logger,
 	}
@@ -94,6 +97,11 @@ func (s *AssetsService) UploadAsset(ctx context.Context, createDto *domain.Creat
 		s.logger.Error("Failed to cache asset", "error", err, "domain", "cache")
 	}
 	s.logger.Info("Asset uploaded successfully", "asset_url", assetURL)
+
+	if createDto.UserID != nil && *createDto.UserID != "" {
+		s.eventPublisher.LogActivity(ctx, *createDto.UserID, "login_attempt_failed_to_fetch_otps", nil)
+	}
+
 	return asset, nil
 }
 

@@ -48,16 +48,44 @@ func NewEventPublisher(config config.KafkaConfig, logger ports.Logger) ports.Eve
 	}
 }
 
-// PublishActivityLogRegistered publishes activity log registration event
-func (p *EventPublisher) PublishActivityLogRegistered(ctx context.Context, event events.ActivityLogRegisteredEvent) error {
+func (p *EventPublisher) LogActivity(ctx context.Context, userID string, action string, metadata *domain.LogActivityMetadata) error {
+
+	var meta domain.LogActivityMetadata
+	if metadata != nil {
+		meta = domain.LogActivityMetadata{
+			IP:       metadata.IP,
+			Device:   metadata.Device,
+			Location: metadata.Location,
+		}
+	} else {
+		meta = domain.LogActivityMetadata{
+			IP:       "assets-service",
+			Device:   "server",
+			Location: "unknown",
+		}
+	}
+
+	metadataJSON, err := json.Marshal(meta)
+	if err != nil {
+		p.logger.Error("Failed to marshal metadata", zap.Error(err))
+		return fmt.Errorf("failed to marshal metadata: %w", err)
+	}
+	event := events.LogActivityEvent{
+		ID:        generateEventID(),
+		UserID:    userID,
+		Action:    action,
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Metadata:  metadataJSON,
+	}
+
 	domainEvent := domain.DomainEvent{
 		ID:          generateEventID(),
-		Type:        domain.EventTypeLogActivityRegistered,
-		AggregateID: event.ID,
+		Type:        domain.EventTypeLogActivity,
+		AggregateID: userID,
 		Version:     1,
 		Data:        eventToMap(event),
 		Metadata: domain.EventMetadata{
-			Source:        "activity-logs-service",
+			Source:        "auth-service",
 			CorrelationID: getCorrelationID(ctx),
 		},
 		Timestamp: time.Now(),
