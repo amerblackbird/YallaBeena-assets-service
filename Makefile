@@ -89,9 +89,50 @@ docker-compose-down:
 .PHONY: docker-test
 docker-test:
 	./test-docker-grpc.sh
+
 .PHONY: gen-proto
 gen-proto:
 	protoc --go_out=./proto/gen --go_opt=paths=source_relative --go-grpc_out=./proto/gen --go-grpc_opt=paths=source_relative proto/assets.proto
+
+# Test targets
+.PHONY: test
+test:
+	go test -v ./...
+
+.PHONY: test-short
+test-short:
+	go test -short -v ./...
+
+.PHONY: test-race
+test-race:
+	go test -race -v ./...
+
+.PHONY: test-coverage
+test-coverage:
+	go test -v -coverprofile=coverage.out ./...
+	go tool cover -html=coverage.out -o coverage.html
+	@echo "Coverage report generated: coverage.html"
+
+.PHONY: test-integration
+test-integration:
+	@echo "Running integration tests..."
+	go test -v -tags=integration ./...
+
+.PHONY: benchmark
+benchmark:
+	go test -bench=. -benchmem ./...
+
+.PHONY: lint
+lint:
+	golangci-lint run
+
+.PHONY: lint-fix
+lint-fix:
+	golangci-lint run --fix
+
+.PHONY: ci-test
+ci-test: lint test-race test-coverage
+	@echo "All CI tests passed!"
 
 
 # Help
@@ -102,8 +143,16 @@ help:
 	@echo "  run            - Build and run the application"
 	@echo "  proto          - Generate protobuf code"
 	@echo "  client         - Build gRPC client example"
-	@echo "  test           - Run tests"
+	@echo "  test           - Run all tests"
+	@echo "  test-short     - Run tests (skip integration tests)"
+	@echo "  test-race      - Run tests with race detector"
+	@echo "  test-coverage  - Run tests with coverage report"
+	@echo "  test-integration - Run integration tests only"
 	@echo "  test-grpc      - Test gRPC endpoints"
+	@echo "  benchmark      - Run benchmarks"
+	@echo "  lint           - Run linter"
+	@echo "  lint-fix       - Run linter with auto-fix"
+	@echo "  ci-test        - Run all CI tests (lint + race + coverage)"
 	@echo "  clean          - Clean build artifacts"
 	@echo "  tidy           - Run go mod tidy"
 	@echo "  fmt            - Format code"
