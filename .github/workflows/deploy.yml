@@ -73,7 +73,7 @@ jobs:
       uses: docker/setup-buildx-action@v3
 
     - name: Build and push Docker image
-      uses: docker/build-push-action@v5
+      uses: docker/build-push-action@v6
       with:
         context: .
         platforms: linux/amd64,linux/arm64
@@ -83,13 +83,14 @@ jobs:
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
-    - name: Upload release assets
+    - name: Upload binaries to release
       if: github.event_name == 'release'
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      uses: actions/upload-artifact@v4
       with:
-        upload_url: ${{ github.event.release.upload_url }}
-        asset_path: ./assets-service-linux-amd64
-        asset_name: assets-service-linux-amd64
-        asset_content_type: application/octet-stream
+        name: release-binaries
+        path: |
+          assets-service-linux-amd64
+          assets-service-linux-arm64
+          assets-service-darwin-amd64
+          assets-service-darwin-arm64
+          assets-service-windows-amd64.exe
