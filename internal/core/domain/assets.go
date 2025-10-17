@@ -2,6 +2,7 @@ package domain
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -94,4 +95,41 @@ type AssetFilter struct {
 	Tags            pq.StringArray `json:"tags"`
 	Limit           int32          `json:"limit"`
 	Offset          int32          `json:"offset"`
+}
+
+func (createDto *CreateAssetDto) GetStoreKey() string {
+	// Generate unique slug for filename to avoid conflicts
+	timestamp := time.Now().Unix()
+	uniqueSlug := fmt.Sprintf("%d_%s", timestamp, createDto.Filename)
+
+	// Generate file key for storage (handle null UserID)
+	var fileKey string = ""
+	if createDto.ResourceType != nil && *createDto.ResourceType != "" && createDto.ResourceID != nil && *createDto.ResourceID != "" {
+		fileKey = fmt.Sprintf("%s/%s/%s", *createDto.ResourceType, *createDto.ResourceID, uniqueSlug)
+	} else if createDto.ResourceType != nil && *createDto.ResourceType != "" && (createDto.ResourceID != nil || *createDto.ResourceID != "") {
+		fileKey = fmt.Sprintf("%s/%s", *createDto.ResourceType, uniqueSlug)
+	}
+
+	return fileKey
+}
+
+func (createDto *CreateAssetDto) GetMetadata(fileKey, fileHash string) []byte {
+
+	metadata := map[string]interface{}{
+		"file_hash":        fileHash,
+		"upload_timestamp": time.Now().Unix(),
+		"storage_key":      fileKey,
+	}
+	if len(createDto.Metadata) > 0 {
+		var customMetadata map[string]interface{}
+		if err := json.Unmarshal(createDto.Metadata, &customMetadata); err == nil {
+			for k, v := range customMetadata {
+				metadata[k] = v
+			}
+		}
+	}
+
+	metadataJSON, _ := json.Marshal(metadata)
+
+	return metadataJSON
 }

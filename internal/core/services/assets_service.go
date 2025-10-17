@@ -3,15 +3,11 @@ package services
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/json"
 	"fmt"
-	"time"
 
 	"assets-service/internal/core/domain"
 	"assets-service/internal/ports"
 	utils "assets-service/internal/utils"
-
-	"github.com/google/uuid"
 )
 
 // AssetsService implements the assets service interface
@@ -38,72 +34,33 @@ func NewAssetsService(
 
 // UploadAsset uploads a new asset and returns metadata
 func (s *AssetsService) UploadAsset(ctx context.Context, createDto *domain.CreateAssetDto, fileData []byte) (*domain.Asset, error) {
-	s.logger.Info("Uploading asset", "filename", createDto.Filename, "user_id", createDto.UserID)
 
-	// Generate unique asset ID
-	assetID := uuid.New().String()
-
-	// Generate unique slug for filename to avoid conflicts
-	timestamp := time.Now().Unix()
-	uniqueSlug := fmt.Sprintf("%d_%s", timestamp, createDto.Filename)
+	// Add metadata including file hash for integrity
+	fileHash := fmt.Sprintf("%x", sha256.Sum256(fileData))
+	fileSize := int64(len(fileData))
 
 	// Generate file key for storage (handle null UserID)
-	var fileKey string = ""
-	if createDto.ResourceType != nil && *createDto.ResourceType != "" && createDto.ResourceID != nil && *createDto.ResourceID != "" {
-		fileKey = fmt.Sprintf("%s/%s/%s", *createDto.ResourceType, *createDto.ResourceID, uniqueSlug)
-	} else if createDto.ResourceType != nil && *createDto.ResourceType != "" && (createDto.ResourceID != nil || *createDto.ResourceID != "") {
-		fileKey = fmt.Sprintf("%s/%s", *createDto.ResourceType, uniqueSlug)
-	}
-	// // Generate file key for storage (handle null UserID)
-	// if createDto.UserID != nil && *createDto.UserID != "" {
-	// 	fileKey = fmt.Sprintf("%s/%s", *createDto.UserID, fileKey)
-	// }
+	fileKey := createDto.GetStoreKey()
+	metadataJSON := createDto.GetMetadata(fileKey, fileHash)
 
-	s.logger.Info("Generated file key for storage", "file_key", fileKey, "asset_id", assetID)
+	// Log upload start
+	s.logger.Info("Uploading asset", "filename", createDto.Filename, "user_id", createDto.UserID, "file_key", fileKey)
 
 	// Upload file to storage
 	assetURL, err := s.storageService.UploadFile(ctx, fileKey, fileData, createDto.ContentType)
 	if err != nil {
 		s.logger.Error("Failed to upload file to storage", "error", err, "file_key", fileKey)
-		return nil, fmt.Errorf("failed to upload file to storage: %w", err)
+
+		return nil, domain.NewDomainError(domain.UnableToMarshalError, "failed to upload file to storag", err)
 	}
 
 	s.logger.Info("File uploaded to storage", "file_key", fileKey, "asset_url", assetURL)
-
-	// Add metadata including file hash for integrity
-	fileHash := fmt.Sprintf("%x", sha256.Sum256(fileData))
-	metadata := map[string]interface{}{
-		"file_hash":        fileHash,
-		"upload_timestamp": time.Now().Unix(),
-		"storage_key":      fileKey,
-	}
-	if len(createDto.Metadata) > 0 {
-		var customMetadata map[string]interface{}
-		if err := json.Unmarshal(createDto.Metadata, &customMetadata); err == nil {
-			for k, v := range customMetadata {
-				metadata[k] = v
-			}
-		} else {
-			s.logger.Warn("Failed to unmarshal custom metadata, ignoring", "error", err)
-		}
-	}
-
-	// Convert metadata to JSON for storage
-	metadataJSON, err := json.Marshal(metadata)
-	if err != nil {
-		return nil, domain.NewDomainError(domain.UnableToMarshalError, "Failed to marshal metadata", err)
-	}
-
-	publicUrl := fmt.Sprintf("assets/%s", assetID)
-
-	fileSize := int64(len(fileData))
 
 	// Create asset DTO for repository
 	assetDto := &domain.CreateAssetDto{
 		StorageKey:      &fileKey,
 		StorageProvider: utils.StringPtr("minio"),
 		URL:             assetURL,
-		PublicURL:       &publicUrl,
 		Filename:        createDto.Filename,
 		ContentType:     createDto.ContentType,
 		FileSize:        fileSize,
@@ -120,9 +77,9 @@ func (s *AssetsService) UploadAsset(ctx context.Context, createDto *domain.Creat
 	}
 
 	// Save asset metadata to database
-	savedAsset, err := s.assetsRepo.CreateAsset(ctx, assetDto)
+	asset, err := s.assetsRepo.CreateAsset(ctx, assetDto)
 	if err != nil {
-		s.logger.Error("Failed to save asset metadata", "error", err, "asset_id", assetID)
+		s.logger.Error("Failed to save asset metadata", "error", err)
 
 		// Rollback: delete the file from storage if database save fails
 		if deleteErr := s.storageService.DeleteFile(ctx, fileKey); deleteErr != nil {
@@ -132,14 +89,12 @@ func (s *AssetsService) UploadAsset(ctx context.Context, createDto *domain.Creat
 	}
 
 	// Cache the asset
-
-	cacheKey := fmt.Sprintf("asset:%s", assetID)
-	if err := s.cacheService.Set(ctx, cacheKey, savedAsset, 0); err != nil {
-		s.logger.Error("Failed to cache asset", "error", err, "asset_id", assetID)
+	cacheKey := fmt.Sprintf("assets:%s", asset.ID.String())
+	if err := s.cacheService.Set(ctx, cacheKey, asset, 0); err != nil {
+		s.logger.Error("Failed to cache asset", "error", err, "domain", "cache")
 	}
-
-	s.logger.Info("Asset uploaded successfully", "asset_id", assetID, "asset_url", assetURL)
-	return savedAsset, nil
+	s.logger.Info("Asset uploaded successfully", "asset_url", assetURL)
+	return asset, nil
 }
 
 // GetAssetByID retrieves an asset by its ID
@@ -148,7 +103,8 @@ func (s *AssetsService) GetAssetByID(ctx context.Context, assetID string) (*doma
 
 	// Check cache first
 	asset := new(domain.Asset)
-	err := s.cacheService.Get(ctx, assetID, asset)
+	cacheKey := fmt.Sprintf("assets:%s", assetID)
+	err := s.cacheService.Get(ctx, cacheKey, asset)
 	if err == nil {
 		return asset, nil
 	}
@@ -156,6 +112,11 @@ func (s *AssetsService) GetAssetByID(ctx context.Context, assetID string) (*doma
 	if err != nil {
 		s.logger.Error("Failed to get asset by ID", "error", err, "asset_id", assetID)
 		return nil, domain.NewDomainError(domain.ResourceNotFoundError, "Asset not found", err)
+	}
+
+	// Cache the asset
+	if err := s.cacheService.Set(ctx, cacheKey, asset, 0); err != nil {
+		s.logger.Error("Failed to cache asset", "error", err, "domain", "cache")
 	}
 
 	return asset, nil
@@ -190,8 +151,18 @@ func (s *AssetsService) DeleteAsset(ctx context.Context, assetID string, userID 
 		return domain.NewDomainError(domain.UnauthorizedError, "Asset does not belong to user", nil)
 	}
 
-	// Delete from storage (TODO: implement actual storage deletion)
-	// storageService.Delete(asset.AssetURL)
+	// Delete from storage
+	err = s.storageService.DeleteFile(ctx, *asset.StorageKey)
+	if err != nil {
+		s.logger.Error("Failed to delete file from storage", "error", err, "storage_key", *asset.StorageKey)
+		return domain.NewDomainError(domain.UnableToDeleteError, "Failed to delete file from storage", err)
+	}
+
+	// Delete from cache
+	cacheKey := fmt.Sprintf("assets:%s", assetID)
+	if err := s.cacheService.Delete(ctx, cacheKey); err != nil {
+		s.logger.Error("Failed to delete asset from cache", "error", err, "asset_id", assetID)
+	}
 
 	// Delete from database
 	if err := s.assetsRepo.DeleteAsset(ctx, assetID); err != nil {

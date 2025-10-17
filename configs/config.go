@@ -116,9 +116,9 @@ func (c *DatabaseConfig) DatabaseURL() string {
 // RedisURL returns the Redis connection URL
 func (c *RedisConfig) RedisURL() string {
 	if c.Password != "" {
-		return fmt.Sprintf("redis://:%s@%s:%d/%d", c.Password, c.Host, c.Port, c.DB)
+		return fmt.Sprintf("%s@%s:%d/%d", c.Password, c.Host, c.Port, c.DB)
 	}
-	return fmt.Sprintf("redis://%s:%d/%d", c.Host, c.Port, c.DB)
+	return fmt.Sprintf("%s:%d", c.Host, c.Port)
 }
 
 // Helper functions

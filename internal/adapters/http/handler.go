@@ -70,7 +70,17 @@ func (h *HTTPHandler) ShowRoutes(r *mux.Router) error {
 	}
 
 	for _, route := range routes {
-		h.logger.Info("Route", zap.String("route", route))
+		parts := strings.SplitN(route, " ", 2)
+		if len(parts) == 2 {
+			h.logger.Info("Registered HTTP route",
+				zap.String("methods", parts[0]),
+				zap.String("path", parts[1]),
+				zap.String("service", "assets-service"))
+		} else {
+			h.logger.Info("Registered HTTP route",
+				zap.String("route", route),
+				zap.String("service", "assets-service"))
+		}
 	}
 	return nil
 }

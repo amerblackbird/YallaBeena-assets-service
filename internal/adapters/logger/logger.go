@@ -1,9 +1,12 @@
 package logger
 
 import (
+	"os"
+
 	"assets-service/internal/ports"
 
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 // LogService implements Logger interface using zap.Logger
@@ -11,8 +14,10 @@ type LogService struct {
 	logger *zap.Logger
 }
 
-// NewLogService creates a new zap logger adapter
+// NewSimpleLogger creates a new zap logger adapter
 func NewSimpleLogger(logger *zap.Logger) ports.Logger {
+	// Add caller skip to bypass the wrapper functions
+	logger = logger.WithOptions(zap.AddCallerSkip(1))
 	return &LogService{
 		logger: logger,
 	}
@@ -20,10 +25,37 @@ func NewSimpleLogger(logger *zap.Logger) ports.Logger {
 
 // NewProductionZapLogger creates a production zap logger
 func NewProductionZapLogger() (ports.Logger, error) {
-	zapLogger, err := zap.NewProduction()
-	if err != nil {
-		return nil, err
+	encoderCfg := zap.NewProductionEncoderConfig()
+	encoderCfg.TimeKey = "timestamp"
+	encoderCfg.MessageKey = "message" // Change from "msg" to "message"
+	encoderCfg.EncodeTime = zapcore.ISO8601TimeEncoder
+
+	config := zap.Config{
+		Level:             zap.NewAtomicLevelAt(zap.InfoLevel),
+		Development:       false,
+		DisableCaller:     false,
+		DisableStacktrace: false,
+		Sampling:          nil,
+		Encoding:          "json",
+		EncoderConfig:     encoderCfg,
+		OutputPaths: []string{
+			"stderr",
+		},
+		ErrorOutputPaths: []string{
+			"stderr",
+		},
+		// Remove InitialFields from here to control order
+		InitialFields: nil,
 	}
+
+	zapLogger := zap.Must(config.Build())
+	// Add the fields after logger creation to control order
+	zapLogger = zapLogger.With(
+		zap.Int("pid", os.Getpid()),
+		zap.String("service", "assets-service"),
+	)
+	// Add caller skip to bypass the wrapper functions
+	zapLogger = zapLogger.WithOptions(zap.AddCallerSkip(1))
 	return &LogService{
 		logger: zapLogger,
 	}, nil
@@ -35,6 +67,8 @@ func NewDevelopmentZapLogger() (ports.Logger, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Add caller skip to bypass the wrapper functions
+	zapLogger = zapLogger.WithOptions(zap.AddCallerSkip(1))
 	return &LogService{
 		logger: zapLogger,
 	}, nil
