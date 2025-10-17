@@ -1,0 +1,107 @@
+syntax = "proto3";
+
+package assets;
+
+option go_package = "assets-service/proto/gen/proto";
+
+import "google/protobuf/timestamp.proto";
+
+// Asset represents an uploaded asset/file
+message Asset {
+  string asset_id = 1;
+  string asset_url = 2; // URL to access the asset
+  string public_url = 3; // Public URL if applicable
+  string filename = 4;
+  string content_type = 5;
+  int64 file_size = 6;
+  string user_id = 7;
+  string resouce_type = 8; // Optional resource type (e.g., post, profile)
+  string resource_id = 9; // Optional resource ID (e.g., post ID, profile ID)
+  bool secure = 10; // Indicates if the asset is private/secure
+  string access_level = 11; // Access level (e.g., public, private)
+  string storage_key = 12; // Key used in storage backend
+  string storage_provider = 13; // Storage provider (e.g., AWS S3,
+  map<string, string> metadata = 14; // Additional metadata (tags, description, etc.)
+  bool active = 15; // Indicates if the asset is active
+  google.protobuf.Timestamp created_at = 16;
+  google.protobuf.Timestamp updated_at = 17;
+}
+
+// UploadAssetRequest represents the request to upload an asset
+message UploadAssetRequest {
+  string filename = 1;
+  string content_type = 2;
+  bytes file_data = 3;
+  string user_id = 4;
+  map<string, string> metadata = 5; // Additional metadata (tags, description, etc.)
+  string resouce_type = 6; // Optional resource type (e.g., post, profile)
+  string resource_id = 7;
+}
+
+// UploadAssetResponse represents the response for uploading an asset
+message UploadAssetResponse {
+  Asset asset = 1;
+}
+
+// GetAssetRequest represents the request to get an asset by ID
+message GetAssetRequest {
+  string asset_id = 1;
+}
+
+// GetAssetResponse represents the response for getting an asset by ID
+message GetAssetResponse {
+  Asset asset = 1;
+}
+
+// GetAssetsByUserRequest represents the request to get assets by user ID
+message GetAssetsByUserRequest {
+  string user_id = 1;
+  int32 limit = 2;
+  int32 offset = 3;
+}
+
+// GetAssetsByUserResponse represents the response for getting assets by user ID
+message GetAssetsByUserResponse {
+  repeated Asset assets = 1;
+  int32 total_count = 2;
+}
+
+// DeleteAssetRequest represents the request to delete an asset
+message DeleteAssetRequest {
+  string asset_id = 1;
+  string user_id = 2; // For authorization
+}
+
+// DeleteAssetResponse represents the response for deleting an asset
+message DeleteAssetResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// HealthCheckRequest represents a health check request
+message HealthCheckRequest {}
+
+// HealthCheckResponse represents a health check response
+message HealthCheckResponse {
+  string status = 1;
+  string service = 2;
+  string version = 3;
+}
+
+// AssetsService defines the gRPC service for assets management
+service AssetsService {
+  // UploadAsset uploads a new asset/file
+  rpc UploadAsset(UploadAssetRequest) returns (UploadAssetResponse);
+  
+  // GetAsset retrieves an asset by its ID
+  rpc GetAsset(GetAssetRequest) returns (GetAssetResponse);
+  
+  // GetAssetsByUser retrieves assets for a specific user
+  rpc GetAssetsByUser(GetAssetsByUserRequest) returns (GetAssetsByUserResponse);
+  
+  // DeleteAsset deletes an asset by its ID
+  rpc DeleteAsset(DeleteAssetRequest) returns (DeleteAssetResponse);
+  
+  // HealthCheck returns the service health status
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+}
