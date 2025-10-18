@@ -2,9 +2,14 @@ package kafka
 
 import (
 	"context"
+	"encoding/json"
 
 	"assets-service/internal/core/domain"
+	"assets-service/internal/core/events"
 	"assets-service/internal/ports"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // EventHandlers manages all event handlers
@@ -18,10 +23,12 @@ type EventHandlers struct {
 }
 
 // NewEventHandlers creates a new event handlers manager
-func NewEventHandlers(assetsRepo ports.AssetsRepository, logger ports.Logger) *EventHandlers {
+func NewEventHandlers(assetsService ports.AssetsService,
+	eventPublisher ports.EventPublisher,
+	logger ports.Logger) *EventHandlers {
 	return &EventHandlers{
+		assetsHandler: NewAssetEventHandler(assetsService, eventPublisher, logger),
 		logger:        logger,
-		assetsHandler: NewActivityLogEventHandler(assetsRepo, logger),
 	}
 }
 
@@ -29,7 +36,7 @@ func NewEventHandlers(assetsRepo ports.AssetsRepository, logger ports.Logger) *E
 func (h *EventHandlers) RegisterHandlers(consumer ports.EventConsumer) error {
 
 	// Register payment event handlers
-	if err := consumer.RegisterHandler(domain.EventTypeLogActivity, h.assetsHandler); err != nil {
+	if err := consumer.RegisterHandler(domain.EventTypeUserCreated, h.assetsHandler); err != nil {
 		return err
 	}
 	h.logger.Info("All event handlers registered successfully")
@@ -37,77 +44,129 @@ func (h *EventHandlers) RegisterHandlers(consumer ports.EventConsumer) error {
 }
 
 type AssetsHandler struct {
-	assetsRepo ports.AssetsRepository
-	logger     ports.Logger
+	assetsService  ports.AssetsService
+	eventPublisher ports.EventPublisher
+	logger         ports.Logger
 }
 
-// NewActivityLogEventHandler creates a new activity log event handler
-func NewActivityLogEventHandler(assetsRepo ports.AssetsRepository, logger ports.Logger) *AssetsHandler {
+// NewAssetEventHandler creates a new assets related event handler
+func NewAssetEventHandler(assetsService ports.AssetsService, eventPublisher ports.EventPublisher, logger ports.Logger) *AssetsHandler {
 	return &AssetsHandler{
-		assetsRepo: assetsRepo,
-		logger:     logger,
+		assetsService:  assetsService,
+		eventPublisher: eventPublisher,
+		logger:         logger,
 	}
 }
 
-// Handle handles activity log events
+// Handle handles assets related events
 func (h *AssetsHandler) Handle(ctx context.Context, event domain.DomainEvent) error {
-	h.logger.Info("Handling activity log event",
+	h.logger.Info("Handling events",
 		"event_type", string(event.Type),
 		"event_id", event.ID,
 		"aggregate_id", event.AggregateID)
 
 	switch event.Type {
-	case domain.EventTypeLogActivity:
-		return h.handleCreateAttachmentProcessed(ctx, event)
+	case domain.EventTypeUserCreated:
+		err := h.handleUserCreated(ctx, event)
+		if err != nil {
+			// Todo:// Add task to retry or log failure
+			h.logger.Error("Failed to handle user created event",
+				"event_id", event.ID,
+				"aggregate_id", event.AggregateID,
+				"error", err)
+			return err
+		}
+		h.logger.Info("User created event handled successfully",
+			"event_id", event.ID,
+			"aggregate_id", event.AggregateID)
+		return nil
 	default:
 		h.logger.Debug("Unhandled activity log event type", "event_type", string(event.Type))
 		return nil
 	}
 }
 
-func (h *AssetsHandler) handleCreateAttachmentProcessed(ctx context.Context, event domain.DomainEvent) error {
-	// h.logger.Info("Processing activity log", "trip_id", event.AggregateID)
-	// h.logger.Info("Event data", "data", event.Data)
-	// // Marshal CreateActivityLogEvent
-	// var createEvent events.ActivityLogEvent
-	// data, err := json.Marshal(event.Data)
-	// if err != nil {
-	// 	h.logger.Error("Failed to marshal event data",
-	// 		"event_type", string(event.Type),
-	// 		"event_id", event.ID,
-	// 		"aggregate_id", event.AggregateID,
-	// 		"error", err)
-	// 	return fmt.Errorf("failed to marshal event data: %w", err)
-	// }
-	// if err := json.Unmarshal(data, &createEvent); err != nil {
-	// 	h.logger.Error("Failed to unmarshal event data",
-	// 		"event_type", string(event.Type),
-	// 		"event_id", event.ID,
-	// 		"aggregate_id", event.AggregateID,
-	// 		"error", err)
-	// 	return fmt.Errorf("failed to unmarshal event data: %w", err)
-	// }
-	// activity, err := h.assetsRepo.CreateAsset(ctx, &domain.CreateAssetDto{
-	// 	Filename:    createEvent.Filename,
-	// 	ContentType: createEvent.ContentType,
-	// 	FileSize:    createEvent.FileSize,
-	// 	UserID:      createEvent.UserID,
-	// 	Metadata:    createEvent.Metadata,
-	// })
-	// if err != nil {
-	// 	h.logger.Error("Failed to create activity log",
-	// 		"event_type", string(event.Type),
-	// 		"event_id", event.ID,
-	// 		"aggregate_id", event.AggregateID,
-	// 		"error", err)
-	// 	return fmt.Errorf("failed to create activity log: %w", err)
-	// }
+func (h *AssetsHandler) handleUserCreated(ctx context.Context, event domain.DomainEvent) error {
+	h.logger.Info("Processing user created event", "user_id", event.AggregateID)
 
-	// h.logger.Info("Activity log created successfully",
-	// 	"event_type", string(event.Type),
-	// 	"event_id", event.ID,
-	// 	"aggregate_id", event.AggregateID,
-	// 	"activity_id", activity.ID)
+	var userCreatedEvent events.UserCreatedEvent
+	data, err := json.Marshal(event.Data)
+	if err != nil {
+		h.logger.Error("Failed to marshal event data",
+			"event_type", string(event.Type),
+			"event_id", event.ID,
+			"aggregate_id", event.AggregateID,
+			"error", err)
+		return err
+	}
+	if err := json.Unmarshal(data, &userCreatedEvent); err != nil {
+		h.logger.Error("Failed to unmarshal event data",
+			"event_type", string(event.Type),
+			"event_id", event.ID,
+			"aggregate_id", event.AggregateID,
+			"error", err)
+		return err
+	}
+
+	if userCreatedEvent.UserID == "" {
+		h.logger.Error("User created event missing UserID",
+			"event_type", string(event.Type),
+			"event_id", event.ID,
+			"aggregate_id", event.AggregateID)
+		return nil // No UserID to process
+	}
+
+	// Create avatar asset for the new user (placeholder logic)
+
+	// Process the user created event (e.g., create a welcome asset)
+
+	h.logger.Info("User created event processed successfully",
+		"user_id", userCreatedEvent.UserID)
+
+	fileName := "avatar.png"
+	resourceType := "users"
+	contentType := "image/png"
+	jsonMeta := json.RawMessage(`{"description":"Welcome avatar for new user"}`)
+
+	fileData := domain.GetDefaultAvatar()
+
+	fileSize := int64(len(fileData)) // Placeholder size
+
+	createDto := &domain.CreateAssetDto{
+		Filename:        fileName,
+		ContentType:     contentType,
+		FileSize:        fileSize,
+		UserID:          &userCreatedEvent.UserID,
+		Metadata:        jsonMeta,
+		Secure:          false,
+		Tags:            []string{},
+		AccessLevel:     "public",
+		AllowedRoles:    []string{},
+		IsEncrypted:     false,
+		EncryptionKey:   nil,
+		StorageProvider: nil,
+		ResourceID:      nil,
+		ResourceType:    &resourceType,
+	}
+
+	// Call the service
+	asset, err := h.assetsService.UploadAsset(ctx, createDto, fileData)
+	if err != nil {
+		h.logger.Error("Failed to upload asset", "error", err)
+		return status.Errorf(codes.Internal, "failed to upload asset: %v", err)
+	}
+
+	// Publish event or log success
+	err = h.eventPublisher.PublishAvatarUpdated(ctx, userCreatedEvent.UserID, asset.URL)
+	if err != nil {
+		h.logger.Error("Failed to publish avatar updated event", "error", err)
+		return status.Errorf(codes.Internal, "failed to publish avatar updated event: %v", err)
+	}
+
+	h.logger.Info("Welcome avatar asset created successfully",
+		"user_id", userCreatedEvent.UserID,
+		"asset_id", asset.ID,
+		"asset_url", asset.URL)
 
 	return nil
 }

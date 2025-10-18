@@ -184,7 +184,7 @@ func (s *Server) assetDomainToProto(asset *domain.Asset) *pb.Asset {
 		ResouceType: resourceType,
 		ResourceId:  resourceId,
 		Secure:      asset.Secure,
-		AccessLevel: asset.AccessLevel,
+		AccessLevel: string(asset.AccessLevel),
 	}
 
 	// Convert string timestamps to timestamppb.Timestamp

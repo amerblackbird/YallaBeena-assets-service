@@ -1,1 +1,0 @@
-ALTER TABLE assets ADD COLUMN file_hash VARCHAR(255);

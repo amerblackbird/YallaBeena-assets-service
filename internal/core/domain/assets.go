@@ -9,6 +9,13 @@ import (
 	"github.com/lib/pq"
 )
 
+type AccessLevel string
+
+const (
+	PublicAccessLevel  AccessLevel = "public"
+	PrivateAccessLevel AccessLevel = "private"
+)
+
 // Asset represents an uploaded asset/file
 type Asset struct {
 	ID              uuid.UUID       `json:"id" db:"id"`
@@ -24,7 +31,7 @@ type Asset struct {
 	ResourceType    *string         `json:"resource_type" db:"resource_type"`       // e.g., "profile_picture", "document"
 	ContentType     string          `json:"content_type" db:"content_type"`         // MIME type
 	UserID          *string         `json:"user_id" db:"user_id"`                   // ID of the user who uploaded the asset
-	AccessLevel     string          `json:"access_level" db:"access_level"`         // e.g., "public", "private"
+	AccessLevel     AccessLevel     `json:"access_level" db:"access_level"`         // e.g., "public", "private"
 	AllowedRoles    pq.StringArray  `json:"allowed_roles" db:"allowed_roles"`       // Roles allowed to access
 	IsEncrypted     bool            `json:"is_encrypted" db:"is_encrypted"`         // Whether the asset is encrypted
 	EncryptionKey   *string         `json:"encryption_key" db:"encryption_key"`     // Key used for encryption if applicable
@@ -106,7 +113,7 @@ func (createDto *CreateAssetDto) GetStoreKey() string {
 	var fileKey string = ""
 	if createDto.ResourceType != nil && *createDto.ResourceType != "" && createDto.ResourceID != nil && *createDto.ResourceID != "" {
 		fileKey = fmt.Sprintf("%s/%s/%s", *createDto.ResourceType, *createDto.ResourceID, uniqueSlug)
-	} else if createDto.ResourceType != nil && *createDto.ResourceType != "" && (createDto.ResourceID != nil || *createDto.ResourceID != "") {
+	} else if createDto.ResourceType != nil && *createDto.ResourceType != "" {
 		fileKey = fmt.Sprintf("%s/%s", *createDto.ResourceType, uniqueSlug)
 	}
 

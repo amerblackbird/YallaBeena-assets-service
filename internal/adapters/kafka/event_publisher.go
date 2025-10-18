@@ -29,6 +29,7 @@ func NewEventPublisher(config config.KafkaConfig, logger ports.Logger) ports.Eve
 	// Create writers for each topic
 	topics := []string{
 		config.Topics.ActivityLogs,
+		config.Topics.UsersEvents,
 	}
 
 	for _, topic := range topics {
@@ -92,6 +93,27 @@ func (p *EventPublisher) LogActivity(ctx context.Context, userID string, action 
 	}
 
 	return p.publishEvent(ctx, p.config.Topics.ActivityLogs, domainEvent)
+}
+func (p *EventPublisher) PublishAvatarUpdated(ctx context.Context, userID string, avatarURL string) error {
+	event := events.UserUpdatedEvent{
+		UserID:    userID,
+		AvatarURL: &avatarURL,
+	}
+
+	domainEvent := domain.DomainEvent{
+		ID:          generateEventID(),
+		Type:        domain.EventTypeUserUpdated,
+		AggregateID: userID,
+		Version:     1,
+		Data:        eventToMap(event),
+		Metadata: domain.EventMetadata{
+			Source:        "assets-service",
+			CorrelationID: getCorrelationID(ctx),
+		},
+		Timestamp: time.Now(),
+	}
+
+	return p.publishEvent(ctx, p.config.Topics.UsersEvents, domainEvent)
 }
 
 // publishEvent publishes a domain event to Kafka

@@ -60,6 +60,7 @@ type KafkaConfig struct {
 // KafkaTopics defines all Kafka topics
 type KafkaTopics struct {
 	ActivityLogs string `json:"activity_logs"`
+	UsersEvents  string `json:"users_events"`
 	AssetsEvents string `json:"assets_events"`
 }
 
@@ -90,6 +91,7 @@ func Load() (*Config, error) {
 			Brokers: []string{getEnv("KAFKA_BROKERS", "localhost:9092")},
 			GroupID: getEnv("KAFKA_GROUP_ID", "assets-service"),
 			Topics: KafkaTopics{
+				UsersEvents:   getEnv("KAFKA_TOPIC_USERS_EVENTS", "user.events"),
 				AssetsEvents: getEnv("KAFKA_TOPIC_ASSETS_EVENTS", "assets.events"),
 				ActivityLogs: getEnv("KAFKA_TOPIC_ACTIVITY_LOGS_EVENTS", "activity.logs"),
 			},

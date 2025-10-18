@@ -41,6 +41,9 @@ func (h *HTTPHandler) SetupRoutes(r *mux.Router) {
 	// Define your HTTP routes here
 	r.HandleFunc("/assets/{id}", h.handleGetAssetById).Methods("GET")
 
+	// 404 Handler
+	r.NotFoundHandler = http.HandlerFunc(h.notFound)
+
 	// Log all routes
 	if err := h.ShowRoutes(r); err != nil {
 		h.logger.Error("Failed to show routes", zap.Error(err))
@@ -117,6 +120,20 @@ func (h *HTTPHandler) handleGetAssetById(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// if asset.AccessLevel != domain.PublicAccessLevel {
+	// 	h.responseWithError(w, http.StatusForbidden, domain.NewDomainError(
+	// 		domain.UnauthorizedError,
+	// 		"Asset is not public", nil))
+	// 	return
+	// }
+
+	// if asset.AccessLevel != domain.PrivateAccessLevel && userId != asset.UserID {
+	// 	h.responseWithError(w, http.StatusForbidden, domain.NewDomainError(
+	// 		domain.UnauthorizedError,
+	// 		"Asset is not public", nil))
+	// 	return
+	// }
+
 	err = h.storageService.Serve(r.Context(), w, *asset.StorageKey)
 	if err != nil {
 		h.responseWithError(w, http.StatusInternalServerError, err)
@@ -141,7 +158,20 @@ func (h *HTTPHandler) HandleGetAssetsByID(ctx context.Context, assetID string) (
 }
 
 func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
+
+	meta := domain.ExtractRequestInfo(r)
+	h.logger.Info("Health check", zap.Any("data", meta))
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"status":"healthy","service":"assets-service","version":"1.0.0"}`))
+}
+
+func (h *HTTPHandler) notFound(w http.ResponseWriter, r *http.Request) {
+	meta := domain.ExtractRequestInfo(r)
+	h.logger.Info("Not found", zap.Any("data", meta))
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusNotFound)
+	w.Write([]byte(`{"error":"Resource not found", "service":"assets-service","version":"1.0.0"}`))
 }

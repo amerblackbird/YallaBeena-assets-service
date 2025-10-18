@@ -83,7 +83,7 @@ func main() {
 	assetsService := services.NewAssetsService(assetsRepo, storageService, eventPublisher, cacheService, appLogger)
 
 	// Initialize event handlers
-	eventHandlers := kafkaadapter.NewEventHandlers(assetsRepo, appLogger)
+	eventHandlers := kafkaadapter.NewEventHandlers(assetsService, eventPublisher, appLogger)
 	eventHandlers.RegisterHandlers(eventConsumer)
 
 	// Initialize HTTP handler
@@ -115,10 +115,11 @@ func main() {
 	// Register gRPC service
 	pb.RegisterAssetsServiceServer(grpcServer, grpcHandlerInstance)
 
-	// Start event consumer
+	// Start event consumer in a goroutine
 	ctx := context.Background()
+	appLogger.Info("Event consumer starting")
 	if err := eventConsumer.Start(ctx); err != nil {
-		log.Fatalf("Failed to start event consumer: %v", err)
+		appLogger.Error("Failed to start event consumer", "error", err)
 	}
 
 	// Start HTTP server in a goroutine

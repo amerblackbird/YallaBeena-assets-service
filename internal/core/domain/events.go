@@ -7,6 +7,8 @@ type EventType string
 const (
 	EventTypeLogActivity           EventType = "log_activity"
 	EventTypeLogActivityRegistered EventType = "log_activity_registered"
+	EventTypeUserCreated           EventType = "user_created"
+	EventTypeUserUpdated           EventType = "user_updated"
 )
 
 // DomainEvent represents a domain event

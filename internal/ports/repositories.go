@@ -20,6 +20,8 @@ type EventPublisher interface {
 	// LogActivity publishes user activity log event
 	LogActivity(ctx context.Context, userID string, action string, metadata *domain.LogActivityMetadata) error
 
+	PublishAvatarUpdated(ctx context.Context, userID string, avatarURL string) error
+
 	// Stop stops publisher events
 	Close() error
 }
