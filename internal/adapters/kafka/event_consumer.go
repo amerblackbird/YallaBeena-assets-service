@@ -33,7 +33,6 @@ func NewEventConsumer(config config.KafkaConfig, logger ports.Logger) ports.Even
 
 	// Create readers for topics we want to consume from
 	consumeTopics := map[string]string{
-		"activity.logs": config.Topics.ActivityLogs,
 	}
 
 	for name, topic := range consumeTopics {
